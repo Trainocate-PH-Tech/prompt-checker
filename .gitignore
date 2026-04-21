@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# Local virtual environment
+env/
+.venv/
+venv/
+
+# Root-level Excel files
+/*.xlsx
+
+# Keep example spreadsheets
+!examples/
+!examples/**/*.xlsx
