@@ -5,6 +5,7 @@ import os
 import sys
 import textwrap
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,7 +13,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from openai import APIConnectionError, APIStatusError, OpenAI
 
-DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-5")
+DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 
@@ -190,6 +191,12 @@ def parse_args() -> argparse.Namespace:
         "--model",
         default=DEFAULT_MODEL,
         help=f"OpenAI model to use. Defaults to {DEFAULT_MODEL}.",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=max(1, min(8, (os.cpu_count() or 4))),
+        help="Number of rows to assess in parallel. Default scales to the machine, capped at 8.",
     )
     return parser.parse_args()
 
@@ -502,31 +509,42 @@ def assess_prompt(prompt: str, rubric: RubricDefinition, model: str, category: s
 
 
 def score_rows(
-    category: str, entries: list[dict[str, str]], model: str
+    category: str, entries: list[dict[str, str]], model: str, workers: int
 ) -> list[list[Any]]:
     rubric = RUBRICS[category]
     header = ["Name", "Prompt", *rubric.criteria, "Total Score", "Overall Feedback"]
-    output_rows: list[list[Any]] = [header]
+    output_rows: list[list[Any]] = [header] + [[] for _ in entries]
 
-    for index, entry in enumerate(entries, start=1):
+    def score_one(index: int, entry: dict[str, str]) -> tuple[int, list[Any]]:
         name = entry["Name"]
         prompt = entry["Prompt"]
         if not prompt:
-            output_rows.append([name, prompt, *([""] * len(rubric.criteria)), "", "Prompt is empty."])
-            continue
-        print(f"Assessing row {index}/{len(entries)}: {name or '(Unnamed)'}", file=sys.stderr)
+            return (
+                index,
+                [name, prompt, *([""] * len(rubric.criteria)), "", "Prompt is empty."],
+            )
+
+        print(f"Assessing row {index + 1}/{len(entries)}: {name or '(Unnamed)'}", file=sys.stderr)
         assessment = assess_prompt(prompt, rubric, model, category)
         criterion_scores = [item["score"] for item in assessment["scores"]]
         total = sum(criterion_scores)
-        output_rows.append(
+        return (
+            index,
             [
                 name,
                 prompt,
                 *criterion_scores,
                 total,
                 assessment["overall_feedback"],
-            ]
+            ],
         )
+
+    max_workers = max(1, min(workers, len(entries) or 1))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(score_one, index, entry) for index, entry in enumerate(entries)]
+        for future in as_completed(futures):
+            row_index, row = future.result()
+            output_rows[row_index + 1] = row
     return output_rows
 
 
@@ -542,7 +560,7 @@ def main() -> int:
     try:
         input_rows = read_rows(input_path)
         entries = normalize_input_rows(input_rows)
-        scored_rows = score_rows(args.category, entries, args.model)
+        scored_rows = score_rows(args.category, entries, args.model, args.workers)
         write_rows(output_path, scored_rows)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)

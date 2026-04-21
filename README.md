@@ -40,7 +40,8 @@ Arguments:
 - `--category`: one of `safety`, `compliance`, `planning`, `assessment`, `growth`
 - `--input`: input `.csv` or `.xlsx` file
 - `--output`: output `.csv` or `.xlsx` file
-- `--model`: optional OpenAI model override. Default is `gpt-5`
+- `--model`: optional OpenAI model override. Default is `gpt-5-mini`
+- `--workers`: optional number of rows to assess in parallel. Default scales to the machine, capped at `8`
 
 Examples:
 
@@ -50,6 +51,10 @@ python app.py --category planning --input examples/planning.xlsx --output planni
 
 ```bash
 python app.py --category safety --input examples/safety.csv --output result.csv
+```
+
+```bash
+python app.py --category safety --input examples/safety.csv --output result.csv --workers 4
 ```
 
 ## Input File Format
@@ -102,6 +107,8 @@ For each row:
 4. The program sums the criterion scores into `Total Score`.
 5. The program writes the results into the output file.
 
+Rows are assessed in parallel, so total runtime is usually much lower than strict one-by-one processing.
+
 ## Rubric Categories
 
 The built-in categories map to the flight missions as follows:
@@ -119,13 +126,12 @@ The built-in categories map to the flight missions as follows:
 - If those artifacts are not present in the workbook, the evaluator scores conservatively based only on the visible prompt text.
 - The program supports both `.csv` and `.xlsx`.
 - The `.xlsx` support uses a simple built-in reader and writer tailored for this workflow.
+- Runtime is dominated by OpenAI API calls, not file I/O.
+- Using a smaller model such as the default `gpt-5-mini` and parallel workers reduces total runtime.
 
 ## API Key Handling
 
-The code supports two ways to supply the key:
-
-1. Recommended: set `OPENAI_API_KEY` in the environment.
-2. Optional local fallback: set `HARDCODED_OPENAI_API_KEY` in [app.py](/home/ralampay/Desktop/prompt-checker/app.py).
+The program reads the API key from the `OPENAI_API_KEY` environment variable.
 
 Environment variable example:
 
@@ -144,5 +150,5 @@ export OPENAI_API_KEY=your_api_key_here
 ```bash
 pip install -r requirements.txt
 export OPENAI_API_KEY=your_api_key_here
-python app.py --category safety --input examples/safety.csv --output result.csv
+python app.py --category safety --input examples/safety.csv --output result.csv --workers 4
 ```
