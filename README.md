@@ -1,6 +1,6 @@
 # Prompt Checker
 
-`Prompt Checker` is a small CLI tool that reads an Excel file of names and prompts, sends each prompt to OpenAI for rubric-based evaluation, and writes the scored results to a new Excel file.
+`Prompt Checker` is a small CLI tool that reads a CSV or Excel file of names and prompts, sends each prompt to OpenAI for rubric-based evaluation, and writes the scored results to a CSV or Excel file.
 
 It is designed for the five DepEd Copilot flight categories:
 
@@ -38,19 +38,23 @@ python app.py --category safety --input examples/safety.xlsx --output result.xls
 Arguments:
 
 - `--category`: one of `safety`, `compliance`, `planning`, `assessment`, `growth`
-- `--input`: input `.xlsx` file
-- `--output`: output `.xlsx` file
+- `--input`: input `.csv` or `.xlsx` file
+- `--output`: output `.csv` or `.xlsx` file
 - `--model`: optional OpenAI model override. Default is `gpt-5`
 
-Example:
+Examples:
 
 ```bash
 python app.py --category planning --input examples/planning.xlsx --output planning_result.xlsx
 ```
 
+```bash
+python app.py --category safety --input examples/safety.csv --output result.csv
+```
+
 ## Input File Format
 
-The input workbook must contain at least these columns in the first row:
+The input file must contain at least these columns in the first row:
 
 ```text
 Name | Prompt
@@ -65,9 +69,14 @@ Kevin  | Make me a lesson plan...
 Happy  | Context: ... Objective: ...
 ```
 
+Supported input formats:
+
+- `.csv`
+- `.xlsx`
+
 ## Output File Format
 
-The output workbook keeps the original `Name` and `Prompt` columns, then adds the rubric columns for the selected category, followed by:
+The output file keeps the original `Name` and `Prompt` columns, then adds the rubric columns for the selected category, followed by:
 
 - `Total Score`
 - `Overall Feedback`
@@ -78,6 +87,11 @@ For example, `safety` outputs:
 Name | Prompt | Use of the CORE Framework (Context, Objective, References, Expectations) | Effectiveness and Clarity of the Instructional Prompt | Ethical, Privacy-Aligned, and Child-Safe Prompting (Justification) | Total Score | Overall Feedback
 ```
 
+Supported output formats:
+
+- `.csv`
+- `.xlsx`
+
 ## How Scoring Works
 
 For each row:
@@ -86,7 +100,7 @@ For each row:
 2. It sends the prompt to OpenAI with the rubric for the selected flight.
 3. OpenAI returns a score from `1` to `4` for each rubric criterion.
 4. The program sums the criterion scores into `Total Score`.
-5. The program writes the results into the output workbook.
+5. The program writes the results into the output file.
 
 ## Rubric Categories
 
@@ -103,7 +117,8 @@ The built-in categories map to the flight missions as follows:
 - The tool scores only what is present in the `Prompt` column.
 - Some rubrics refer to items like justifications, reflections, validations, or attached reference files.
 - If those artifacts are not present in the workbook, the evaluator scores conservatively based only on the visible prompt text.
-- The program uses a simple built-in `.xlsx` reader and writer tailored for this workflow.
+- The program supports both `.csv` and `.xlsx`.
+- The `.xlsx` support uses a simple built-in reader and writer tailored for this workflow.
 
 ## API Key Handling
 
@@ -122,12 +137,12 @@ export OPENAI_API_KEY=your_api_key_here
 
 - [app.py](/home/ralampay/Desktop/prompt-checker/app.py): CLI program
 - [requirements.txt](/home/ralampay/Desktop/prompt-checker/requirements.txt): Python dependency list
-- `safety.xlsx`, `compliance.xlsx`, `planning.xlsx`, `assessment.xlsx`, `growth.xlsx`: sample inputs
+- `examples/*.csv` and `examples/*.xlsx`: sample inputs, if present
 
 ## Quick Start
 
 ```bash
 pip install -r requirements.txt
 export OPENAI_API_KEY=your_api_key_here
-python app.py --category safety --input safety.xlsx --output result.xlsx
+python app.py --category safety --input examples/safety.csv --output result.csv
 ```

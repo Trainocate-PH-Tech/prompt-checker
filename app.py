@@ -1,4 +1,5 @@
 import argparse
+import csv
 import json
 import os
 import sys
@@ -175,7 +176,7 @@ CLIENT = OpenAI(api_key=OPENAI_API_KEY or None)
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Score prompt submissions against a flight rubric and export results to XLSX."
+        description="Score prompt submissions against a flight rubric and export results to CSV or XLSX."
     )
     parser.add_argument(
         "--category",
@@ -183,8 +184,8 @@ def parse_args() -> argparse.Namespace:
         choices=sorted(RUBRICS.keys()),
         help="Rubric category to use: safety, compliance, planning, assessment, or growth.",
     )
-    parser.add_argument("--input", required=True, help="Path to the input XLSX file.")
-    parser.add_argument("--output", required=True, help="Path to the output XLSX file.")
+    parser.add_argument("--input", required=True, help="Path to the input CSV or XLSX file.")
+    parser.add_argument("--output", required=True, help="Path to the output CSV or XLSX file.")
     parser.add_argument(
         "--model",
         default=DEFAULT_MODEL,
@@ -322,6 +323,37 @@ def write_xlsx_rows(path: Path, rows: list[list[Any]]) -> None:
         zf.writestr("docProps/app.xml", app)
 
 
+def read_csv_rows(path: Path) -> list[list[str]]:
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        return [row for row in csv.reader(handle)]
+
+
+def write_csv_rows(path: Path, rows: list[list[Any]]) -> None:
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerows(rows)
+
+
+def read_rows(path: Path) -> list[list[str]]:
+    suffix = path.suffix.lower()
+    if suffix == ".xlsx":
+        return read_xlsx_rows(path)
+    if suffix == ".csv":
+        return read_csv_rows(path)
+    raise ValueError(f"Unsupported input format: {path.suffix}. Use .csv or .xlsx.")
+
+
+def write_rows(path: Path, rows: list[list[Any]]) -> None:
+    suffix = path.suffix.lower()
+    if suffix == ".xlsx":
+        write_xlsx_rows(path, rows)
+        return
+    if suffix == ".csv":
+        write_csv_rows(path, rows)
+        return
+    raise ValueError(f"Unsupported output format: {path.suffix}. Use .csv or .xlsx.")
+
+
 def normalize_input_rows(rows: list[list[str]]) -> list[dict[str, str]]:
     if not rows:
         raise ValueError("Input workbook is empty.")
@@ -402,9 +434,9 @@ def extract_completion_text(completion: Any) -> str:
 
 
 def assess_prompt(prompt: str, rubric: RubricDefinition, model: str, category: str) -> dict[str, Any]:
-    if not (OPENAI_API_KEY or HARDCODED_OPENAI_API_KEY):
+    if not (OPENAI_API_KEY):
         raise RuntimeError(
-            "OPENAI_API_KEY is not set. Export OPENAI_API_KEY or set HARDCODED_OPENAI_API_KEY in app.py."
+            "OPENAI_API_KEY is not set. Export OPENAI_API_KEY or set in app.py."
         )
 
     system_prompt = textwrap.dedent(
@@ -508,10 +540,10 @@ def main() -> int:
         return 1
 
     try:
-        input_rows = read_xlsx_rows(input_path)
+        input_rows = read_rows(input_path)
         entries = normalize_input_rows(input_rows)
         scored_rows = score_rows(args.category, entries, args.model)
-        write_xlsx_rows(output_path, scored_rows)
+        write_rows(output_path, scored_rows)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
