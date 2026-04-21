@@ -10,6 +10,8 @@ venv/
 # Root-level Excel files
 /*.xlsx
 
+*.csv
+
 # Keep example spreadsheets
 !examples/
 !examples/**/*.xlsx
